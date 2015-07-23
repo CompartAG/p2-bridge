@@ -41,114 +41,100 @@ import org.sonatype.p2.bridge.model.RequiredCapability;
 import org.sonatype.p2.bridge.model.TouchpointData;
 import org.sonatype.p2.bridge.model.TouchpointInstruction;
 
-public class PublisherService
-    extends AbstractService
-    implements Publisher
-{
+public class PublisherService extends AbstractService implements Publisher {
 
-    public void generateUpdateSite( final File location, final URI repositoryLocation )
-    {
+    @Override
+    public void generateUpdateSite(final File location, final URI repositoryLocation) {
         IProvisioningAgent agent = null;
         final File agentDir = Utils.temporaryAgentLocation();
-        try
-        {
+        try {
             getLock().readLock().lock();
 
-            agent = createProvisioningAgent( agentDir.toURI() );
+            agent = createProvisioningAgent(agentDir.toURI());
 
             final PublisherInfo info = new PublisherInfo();
-            info.setArtifactRepository( org.eclipse.equinox.p2.publisher.Publisher.createArtifactRepository(
-                agent, repositoryLocation, null /* name */, false /* compress */, true /* reusePackedFiles */
-            ) );
-            info.setMetadataRepository( org.eclipse.equinox.p2.publisher.Publisher.createMetadataRepository(
-                agent, repositoryLocation, null /* name */, false /* append */, false /* compress */
-            ) );
+            info.setArtifactRepository(org.eclipse.equinox.p2.publisher.Publisher.createArtifactRepository(agent,
+                    repositoryLocation, null /* name */, false /* compress */, true /* reusePackedFiles */
+                    ));
+            info.setMetadataRepository(org.eclipse.equinox.p2.publisher.Publisher.createMetadataRepository(agent,
+                    repositoryLocation, null /* name */, false /* append */, false /* compress */
+                    ));
 
-            new org.eclipse.equinox.p2.publisher.Publisher( info ).publish(
-                new IPublisherAction[]{ new LocalUpdateSiteAction( location.getAbsolutePath(), null ) },
-                new NullProgressMonitor() );
-        }
-        catch ( final ProvisionException e )
-        {
-            throw new RuntimeException( "Cannot generate update site. Reason: " + e.getMessage(), e );
-        }
-        finally
-        {
-            if ( agent != null )
-            {
+            new org.eclipse.equinox.p2.publisher.Publisher(info).publish(
+                    new IPublisherAction[] { new LocalUpdateSiteAction(location.getAbsolutePath(), null) },
+                    new NullProgressMonitor());
+        } catch (final ProvisionException e) {
+            throw new RuntimeException("Cannot generate update site. Reason: " + e.getMessage(), e);
+        } finally {
+            if (agent != null) {
                 agent.stop();
             }
-            Utils.deleteIfPossible( agentDir );
+            Utils.deleteIfPossible(agentDir);
             getLock().readLock().unlock();
         }
     }
 
-    public Collection<InstallableUnit> generateIUs( final boolean generateCapabilities,
-                                                    final boolean generateRequirements, final boolean generateManifest,
-                                                    final File... bundles )
-    {
-        final BundlesAction bundlesAction = new BundlesAction( bundles );
+    @Override
+    public Collection<InstallableUnit> generateIUs(final boolean generateCapabilities,
+            final boolean generateRequirements, final boolean generateManifest, final File... bundles) {
+        final BundlesAction bundlesAction = new BundlesAction(bundles);
 
         final PublisherInfo request = new PublisherInfo();
         final PublisherResult result = new PublisherResult();
         final NullProgressMonitor monitor = new NullProgressMonitor();
 
-        bundlesAction.perform( request, result, monitor );
+        bundlesAction.perform(request, result, monitor);
 
-        return translate( generateCapabilities, generateRequirements, generateManifest, true,
-                          result.query( QueryUtil.createIUAnyQuery(), monitor ).toSet() );
+        return translate(generateCapabilities, generateRequirements, generateManifest, true,
+                result.query(QueryUtil.createIUAnyQuery(), monitor).toSet());
     }
 
-    public Collection<InstallableUnit> generateFeatureIUs( final boolean generateCapabilities,
-                                                           final boolean generateRequirements,
-                                                           final File... features )
-    {
-        final FeaturesAction action = new FeaturesAction( features );
+    @Override
+    public Collection<InstallableUnit> generateFeatureIUs(final boolean generateCapabilities,
+            final boolean generateRequirements, final File... features) {
+        final FeaturesAction action = new FeaturesAction(features);
         final PublisherInfo request = new PublisherInfo();
         final PublisherResult result = new PublisherResult();
         final NullProgressMonitor monitor = new NullProgressMonitor();
-        action.perform( request, result, monitor );
-        return translate( generateCapabilities, generateRequirements, false, true,
-                          result.query( QueryUtil.createIUAnyQuery(), monitor ).toSet() );
+        action.perform(request, result, monitor);
+        return translate(generateCapabilities, generateRequirements, false, true,
+                result.query(QueryUtil.createIUAnyQuery(), monitor).toSet());
     }
 
-    private Collection<InstallableUnit> translate( final boolean generateCapabilities,
-                                                   final boolean generateRequirements, final boolean generateManifest,
-                                                   final boolean generateProperties,
-                                                   final Collection<IInstallableUnit> units )
-    {
+    private Collection<InstallableUnit> translate(final boolean generateCapabilities,
+            final boolean generateRequirements, final boolean generateManifest, final boolean generateProperties,
+            final Collection<IInstallableUnit> units) {
         final ArrayList<InstallableUnit> results = new ArrayList<InstallableUnit>();
-        for ( final IInstallableUnit unit : units )
-        {
+        for (final IInstallableUnit unit : units) {
             final InstallableUnit result = new InstallableUnit();
 
-            result.setId( unit.getId() );
-            result.setVersion( unit.getVersion().toString() );
-            result.setSingleton( unit.isSingleton() );
+            result.setId(unit.getId());
+            result.setVersion(unit.getVersion().toString());
+            result.setSingleton(unit.isSingleton());
 
-            if ( generateProperties )
-            {
-                appendProperties( unit.getProperties(), result );
+            if (generateProperties) {
+                appendProperties(unit.getProperties(), result);
             }
 
-            if ( generateCapabilities )
-            {
-                appendCapabilities( unit.getProvidedCapabilities(), result );
+            if (generateCapabilities) {
+                appendCapabilities(unit.getProvidedCapabilities(), result);
             }
 
-            if ( generateRequirements )
-            {
-                appendRequirements( unit.getRequirements(), result );
+            if (generateRequirements) {
+                appendRequirements(unit.getRequirements(), result);
             }
 
-            if ( generateManifest )
-            {
-                translateInstruction( "manifest", unit, result );
+            if (generateManifest) {
+                translateInstruction("manifest", unit, result);
             }
 
-            translateInstruction( "zipped", unit, result );
+            if (unit.getFilter() != null) {
+                result.setFilter(unit.getFilter().getParameters()[0].toString());
+            }
 
-            results.add( result );
+            translateInstruction("zipped", unit, result);
+
+            results.add(result);
         }
         return results;
     }
@@ -157,16 +143,14 @@ public class PublisherService
      * Appends the passed properties.
      *
      * @param properties The properties
-     * @param result     The result unit where to append them
+     * @param result The result unit where to append them
      */
-    private void appendProperties( Map<String, String> properties, InstallableUnit result )
-    {
-        for ( Entry<String, String> e : properties.entrySet() )
-        {
+    private void appendProperties(Map<String, String> properties, InstallableUnit result) {
+        for (Entry<String, String> e : properties.entrySet()) {
             final InstallableUnitProperty prop = new InstallableUnitProperty();
-            prop.setName( e.getKey() );
-            prop.setValue( e.getValue() );
-            result.addProperty( prop );
+            prop.setName(e.getKey());
+            prop.setValue(e.getValue());
+            result.addProperty(prop);
         }
     }
 
@@ -174,39 +158,33 @@ public class PublisherService
      * Appends the passed requirements to the unit.
      *
      * @param requirements The requirements or null
-     * @param result       The result unit where to append them
+     * @param result The result unit where to append them
      */
-    private void appendRequirements( final Collection<IRequirement> requirements, final InstallableUnit result )
-    {
-        if ( requirements == null )
-        {
+    private void appendRequirements(final Collection<IRequirement> requirements, final InstallableUnit result) {
+        if (requirements == null) {
             return;
         }
-        for ( final IRequirement requirement : requirements )
-        {
+        for (final IRequirement requirement : requirements) {
             final RequiredCapability resultCapability = new RequiredCapability();
             final IMatchExpression<IInstallableUnit> match = requirement.getMatches();
-            resultCapability.setMatch( ExpressionUtil.getOperand( match ).toString() );
+            resultCapability.setMatch(ExpressionUtil.getOperand(match).toString());
             final Object[] params = match.getParameters();
-            if ( params.length > 0 )
-            {
+            if (params.length > 0) {
                 final IExpressionFactory factory = ExpressionUtil.getFactory();
                 final IExpression[] constantArray = new IExpression[params.length];
-                for ( int idx = 0; idx < params.length; ++idx )
-                {
-                    constantArray[idx] = factory.constant( params[idx] );
+                for (int idx = 0; idx < params.length; ++idx) {
+                    constantArray[idx] = factory.constant(params[idx]);
                 }
-                resultCapability.setMatchParameters( factory.array( constantArray ).toString() );
+                resultCapability.setMatchParameters(factory.array(constantArray).toString());
             }
-            if ( requirement.getFilter() != null )
-            {
-                resultCapability.setFilter( requirement.getFilter().getParameters()[0].toString() );
+            if (requirement.getFilter() != null) {
+                resultCapability.setFilter(requirement.getFilter().getParameters()[0].toString());
             }
-            resultCapability.setMin( requirement.getMin() );
-            resultCapability.setMax( requirement.getMax() );
-            resultCapability.setGreedy( requirement.isGreedy() );
+            resultCapability.setMin(requirement.getMin());
+            resultCapability.setMax(requirement.getMax());
+            resultCapability.setGreedy(requirement.getMin() > 0 ? requirement.isGreedy() : false);
 
-            result.addRequiredCapability( resultCapability );
+            result.addRequiredCapability(resultCapability);
         }
     }
 
@@ -214,21 +192,18 @@ public class PublisherService
      * Appends the passed capabilities to the unit.
      *
      * @param capabilities The capabilities or null
-     * @param result       The result unit where to append them
+     * @param result The result unit where to append them
      */
-    private void appendCapabilities( final Collection<IProvidedCapability> capabilities, final InstallableUnit result )
-    {
-        if ( capabilities == null )
-        {
+    private void appendCapabilities(final Collection<IProvidedCapability> capabilities, final InstallableUnit result) {
+        if (capabilities == null) {
             return;
         }
-        for ( final IProvidedCapability capability : capabilities )
-        {
+        for (final IProvidedCapability capability : capabilities) {
             final ProvidedCapability resultCapability = new ProvidedCapability();
-            resultCapability.setName( capability.getName() );
-            resultCapability.setNamespace( capability.getNamespace() );
-            resultCapability.setVersion( capability.getVersion().toString() );
-            result.addProvidedCapability( resultCapability );
+            resultCapability.setName(capability.getName());
+            resultCapability.setNamespace(capability.getNamespace());
+            resultCapability.setVersion(capability.getVersion().toString());
+            result.addProvidedCapability(resultCapability);
         }
     }
 
@@ -240,36 +215,30 @@ public class PublisherService
      * method is called lots of times with different keys.
      * </p>
      *
-     * @param instructionKey      the key to copy across from <code>fromInstallableUnit</code> to
-     *                            <code>toInstallableUnit</code>
+     * @param instructionKey the key to copy across from <code>fromInstallableUnit</code> to
+     *            <code>toInstallableUnit</code>
      * @param fromInstallableUnit the source object
-     * @param toInstallableUnit   the destination object
+     * @param toInstallableUnit the destination object
      */
-    private void translateInstruction( String instructionKey,
-                                       final IInstallableUnit fromInstallableUnit,
-                                       final InstallableUnit toInstallableUnit )
-    {
+    private void translateInstruction(String instructionKey, final IInstallableUnit fromInstallableUnit,
+            final InstallableUnit toInstallableUnit) {
         final Collection<ITouchpointData> touchpointData = fromInstallableUnit.getTouchpointData();
-        if ( touchpointData == null )
-        {
+        if (touchpointData == null) {
             return;
         }
-        for ( final ITouchpointData touchpointDataEntry : touchpointData )
-        {
-            final ITouchpointInstruction instruction = touchpointDataEntry.getInstruction( instructionKey );
-            if ( instruction == null )
-            {
+        for (final ITouchpointData touchpointDataEntry : touchpointData) {
+            final ITouchpointInstruction instruction = touchpointDataEntry.getInstruction(instructionKey);
+            if (instruction == null) {
                 continue;
             }
             final TouchpointInstruction resultTouchpointInstruction = new TouchpointInstruction();
-            resultTouchpointInstruction.setKey( instructionKey );
-            resultTouchpointInstruction.setBody( instruction.getBody() );
+            resultTouchpointInstruction.setKey(instructionKey);
+            resultTouchpointInstruction.setBody(instruction.getBody());
 
-            if ( toInstallableUnit.getTouchpointData() == null )
-            {
-                toInstallableUnit.setTouchpointData( new TouchpointData() );
+            if (toInstallableUnit.getTouchpointData() == null) {
+                toInstallableUnit.setTouchpointData(new TouchpointData());
             }
-            toInstallableUnit.getTouchpointData().addInstruction( resultTouchpointInstruction );
+            toInstallableUnit.getTouchpointData().addInstruction(resultTouchpointInstruction);
         }
     }
 
